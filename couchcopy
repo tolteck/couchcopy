@@ -202,14 +202,14 @@ async def load(archive, admin=None, tmp_dir=None, blocking=True):
     os.mkdir(tmp_dir.name + '/etc/local.d')
     os.mkdir(tmp_dir.name + '/data')
     creds = ['admin', 'password'] if not admin else admin.split(':')
-    s1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s1.bind(('localhost', 0))
-    _, port1 = s1.getsockname()
-    s2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s2.bind(('localhost', 0))
-    _, port2 = s2.getsockname()
-    s1.close()
-    s2.close()
+    # s1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # s1.bind(('localhost', 0))
+    port1 = 5984
+    # s2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # s2.bind(('localhost', 0))
+    port2 = 5986
+    # s1.close()
+    # s2.close()
 
     for file in ('vm.args', 'default.ini', 'local.ini'):
         shutil.copy('/etc/couchdb/' + file, tmp_dir.name + '/etc/' + file)
@@ -217,9 +217,12 @@ async def load(archive, admin=None, tmp_dir=None, blocking=True):
     with open(tmp_dir.name + '/etc/local.d/couchcopy.ini', 'w') as f:
         f.write(f'[chttpd]\n'
                 f'port = {port1}\n'
+                'require_valid_user = true\n'
                 f'\n'
                 f'[httpd]\n'
                 f'port = {port2}\n'
+                'enable_cors = true\n'
+                'WWW-Authenticate = Basic realm="Who are you?"\n'
                 f'\n'
                 f'[couchdb]\n'
                 f'database_dir = {tmp_dir.name}/data\n'
@@ -235,6 +238,16 @@ async def load(archive, admin=None, tmp_dir=None, blocking=True):
                 f'db_channels = ,\n'
                 f'view_channels = ,\n'
                 f'\n'
+                '[cors]\n'
+                'credentials = true\n'
+                'origins = *\n'
+                'methods = GET, HEAD, POST, PUT, DELETE\n'
+                'headers = Accept, Authorization, Content-Type, Origin\n'
+                '\n'
+                '[couch_httpd_auth]\n'
+                'allow_persistent_cookies = true\n'
+                'secret = toto\n'
+                '\n'
                 f'[admins]\n'
                 f'{creds[0]} = {creds[1]}\n')
 
