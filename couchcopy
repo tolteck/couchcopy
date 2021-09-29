@@ -283,10 +283,10 @@ async def load(archive, admin=None, tmp_dir=None, blocking=True):
 
 
 async def unbrand(old_archive, new_archive, tmp_dir=None):
-    node_name, tmp_dir = await load(old_archive, tmp_dir=tmp_dir,
-                                    blocking=False)
-    await backup('localhost', tmp_dir.name + '/data', new_archive,
-                 nodes_names=[node_name])
+    node_name, origin_tmp_dir = await load(
+        old_archive, tmp_dir=tmp_dir, blocking=False)
+    await backup('localhost', origin_tmp_dir.name + '/data', new_archive,
+                 tmp_dir=tmp_dir, nodes_names=[node_name])
 
 
 async def restore(archive, cred, hostnames, paths, ports, names, couchdb_start,
