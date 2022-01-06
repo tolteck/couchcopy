@@ -37,6 +37,20 @@ async def subprocess(*args, shell=False):
             stderr=asyncio.subprocess.PIPE)
     stdout, stderr = await p.communicate()
     stdout, stderr = stdout.decode(), stderr.decode()
+    if args[0] == 'rsync' and p.returncode == 24:
+        # When a file is deleted between the start of rsync and the moment
+        # the file is copied, rsync outputs a "warning: some files vanished"
+        # log and it exits with return code 24.
+        # See upstream explanation:
+        # https://bugzilla.samba.org/show_bug.cgi?id=10356
+        # Despite the non-zero return code, rsync does its work as if
+        # nothing happened.
+        # We think it's OK that CouchDB delete files thus we print the rsync
+        # warning but we ignore its return code.
+        # If more critical exit codes are returned, they are prioritized by
+        # rsync, so it's OK to ignore exit code 24.
+        print(stderr)
+        return stdout
     if p.returncode == 0:
         return stdout
     raise Exception(f'Command {args[0]} returned code {p.returncode}, stdout: '
