@@ -18,7 +18,7 @@ import aiocouch
 import yaml
 
 
-__version__ = '0.1.4'
+__version__ = '0.1.5'
 # Tweak this parameter to your needs: From 17 minutes with 16 workers to 28
 # minutes with 8 workers for 10^5 databases on my machine.
 N_WORKERS = 16
