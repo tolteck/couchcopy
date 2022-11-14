@@ -1,4 +1,4 @@
-couchcopy
+Couchcopy
 =========
 
 Create an archive of a running CouchDB node, saving CouchDB files
@@ -7,7 +7,7 @@ To allow backup of a running CouchDB, files are copied before archive creation.
 
 Restore an archive of a CouchDB node to a new CouchDB. The new CouchDB can be a
 cluster of multiple nodes.
-The new CouchDB configuration should already be done before using couchcopy,
+The new CouchDB configuration should already be done before using Couchcopy,
 however, all existing data will be deleted.
 During restoration, CouchDB will be stopped and restarted on each cluster
 nodes.
@@ -17,7 +17,7 @@ Limitations
 
 Tested with CouchDB 3.1.1 only.
 
-To restore an archive, couchcopy needs to stop and start CouchDB. It assumes
+To restore an archive, Couchcopy needs to stop and start CouchDB. It assumes
 that CouchDB is controlled by systemd. If you don't use systemd you can
 change parameters ``--couchdb-start`` and ``--couchdb-stop``.
 
@@ -33,14 +33,14 @@ The number of shards per database, i.e. the value of ``q``, should be the same
 for the origin CouchDB and the destination CouchDB.
 Otherwise, ``tree /data/shards`` is not the same.
 
-couchcopy assumes you have read and write permissions on CouchDB data
+Couchcopy assumes you have read and write permissions on CouchDB data
 directories. If you don't have them, you can try to use the ``--use-sudo``
 option.
 
 Get started
 -----------
 
-Install couchcopy:
+Install Couchcopy:
 
 .. code:: shell
 
@@ -110,13 +110,13 @@ old CouchDB, nodes names are updated using  CouchDB ``/_node/_local/_dbs``
 endpoint. See CouchDB ``/_node/_local/_dbs`` `endpoint documentation
 <https://docs.couchdb.org/en/3.1.1/cluster/sharding.html#updating-cluster-metadata-to-reflect-the-new-target-shard-s>`_.
 
-During restoration, couchcopy first updates one CouchDB node metadata (i.e. the
+During restoration, Couchcopy first updates one CouchDB node metadata (i.e. the
 list of nodes names) then it lets CouchDB itself synchronize metadata to the
 other nodes.
-couchcopy exits when the synchronization is finished for all nodes, using
+Couchcopy exits when the synchronization is finished for all nodes, using
 undocumented CouchDB ``/_dbs`` endpoint to monitor CouchDB nodes
 synchronization.
-You can skip that part if you want, i.e. you can exit couchcopy safely when the
+You can skip that part if you want, i.e. you can exit Couchcopy safely when the
 following log trace is displayed
 ``[Waiting for CouchDB cluster synchronization...]``.
 For a CouchDB of 10^5 databases, updating the first node metadata takes 35
