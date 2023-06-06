@@ -59,41 +59,69 @@ async def subprocess(*args, shell=False, input=None):
                     f'{stdout}, stderr: {stderr}')
 
 
-async def backup(hostname, path, output, reuse_dir=None, tmp_dir=None,
-                 nodes_names=None):
-    tmp_dir = TemporaryDirectory(prefix='couchcopy-', dir=tmp_dir)
-    tmp_path = reuse_dir or tmp_dir.name
-    if not os.path.exists(tmp_path + '/data'):
-        os.mkdir(tmp_path + '/data')
+async def backup(hostname, path, output, nodes_names=None):
+    metadata = yaml.dump({
+        'backup': {
+            'date': datetime.now().isoformat(),
+            'source': {'nodes-names': nodes_names or []},
+        },
+        'couchcopy': {'version': __version__},
+    }, default_flow_style=False).encode()
 
-    with open(tmp_path + '/metadata.yaml', 'w') as f:
-        yaml.dump({
-            'backup': {
-                'date': datetime.now().isoformat(),
-                'source': {'nodes-names': nodes_names or []},
-            },
-            'couchcopy': {'version': __version__},
-        }, f, default_flow_style=False)
+    print('[tar+ssh+gzip...]')
 
-    # rsync is used to copy from remote machine, but also to save files
-    # in a specific order, and to avoid using `tar` on files that are used in
-    # parallel by a running CouchDB.
-    print('[rsync...]')
-    hostname = hostname + ':' if hostname != 'localhost' else ''
-    await subprocess('rsync', '--del', '--ignore-missing-args',
-                     '-av', hostname + path + '/.shards', tmp_path + '/data')
-    await subprocess('rsync', '--del', '-av', hostname + path + '/_dbs.couch',
-                     tmp_path + '/data')
-    await subprocess('rsync', '--del', '--ignore-missing-args',
-                     '-av', hostname + path + '/shards', tmp_path + '/data')
+    ssh_if_needed = ('ssh', hostname, '--') if hostname != 'localhost' else ()
+    tempdir = await subprocess(*ssh_if_needed,
+                               'mktemp', '-d', '--tmpdir', 'couchcopy-XXXXX')
 
-    print('[tar...]')
-    await subprocess('tar', '-I', 'pigz', '-cf', output, '-C', tmp_path,
-                     'metadata.yaml', 'data')
-    # For debugging purposes:
-    # if tmp_dir:
-    #     shutil.rmtree('/tmp/couchcopy', True)
-    #     shutil.copytree(tmp_dir.name, '/tmp/couchcopy')
+    try:
+        tempdir = tempdir.strip()
+        await subprocess(*ssh_if_needed,
+                         'dd', f'of={tempdir}/metadata.yaml', 'status=none',
+                         input=metadata)
+
+        with open(output, 'wb') as archive:
+            pipe_out, pipe_in = os.pipe()
+            p1 = await asyncio.create_subprocess_exec(
+                *ssh_if_needed,
+                'tar',
+                '-C', tempdir, '-c', 'metadata.yaml',
+                '-C', os.path.dirname(path),
+                '-c', os.path.basename(path) + '/.shards',
+                os.path.basename(path) + '/_dbs.couch',
+                os.path.basename(path) + '/shards',
+                '--transform', f's/^{re.escape(os.path.basename(path))}/data/',
+                stdout=pipe_in, stderr=asyncio.subprocess.PIPE,
+                env={'LANG': 'C'})
+            p2 = await asyncio.create_subprocess_exec(
+                'pigz', stdin=pipe_out, stdout=archive,
+                stderr=asyncio.subprocess.PIPE)
+            os.close(pipe_in)
+            os.close(pipe_out)
+            _, stderr1, returncode1 = *await p1.communicate(), p1.returncode
+            _, stderr2, returncode2 = *await p2.communicate(), p2.returncode
+
+            # tar can exit with return code 1 if files are modified on disk
+            # during the archive creation. This is normal behavior when the
+            # CouchDB instance is running, so let's filter out these errors and
+            # fail only on other ones.
+            if returncode1 == 1:
+                stderr1 = '\n'.join(
+                    l for l in stderr1.decode().splitlines()
+                    if not l.endswith('file changed as we read it')).encode()
+                if not stderr1:
+                    returncode1 = 0
+
+            if returncode1 != 0:
+                raise Exception(f'Command tar returned code {returncode1}, '
+                                f'stderr: {stderr1.decode()}')
+            if returncode2 != 0:
+                raise Exception(f'Command pigz returned code {returncode2}, '
+                                f'stderr: {stderr2.decode()}')
+
+    finally:
+        await subprocess(*ssh_if_needed,
+                         'rm', '-rf', tempdir)
 
 
 async def couch_conn(url, user, password):
@@ -302,7 +330,7 @@ async def unbrand(old_archive, new_archive, tmp_dir=None):
     node_name, origin_tmp_dir = await load(
         old_archive, tmp_dir=tmp_dir, blocking=False)
     await backup('localhost', origin_tmp_dir.name + '/data', new_archive,
-                 tmp_dir=tmp_dir, nodes_names=[node_name])
+                 nodes_names=[node_name])
 
 
 async def restore(archive, cred, hostnames, paths, ports, names, couchdb_start,
@@ -460,11 +488,6 @@ async def main():
     sub['backup'].add_argument('couchdb',
                                metavar='hostname,/couchdb/data/dir')
     sub['backup'].add_argument('archive', metavar='backup.tar.gz')
-    sub['backup'].add_argument('--rsync-reuse-dir', help=(
-        'directory on the local machine to store data reused between '
-        'executions, if not set rsync starts from scratch'))
-    sub['backup'].add_argument('--tmp-dir', help=(
-        'directory on the local machine to store temporary data'))
     sub['unbrand'] = subparsers.add_parser('unbrand', description=(
         'Unbrand shards inside a backup.tar.gz file from their origin CouchDB '
         'node name to a unique and reusable node name. Use this option to '
@@ -513,11 +536,8 @@ async def main():
         hostname, path = splitted
         if hostname and any(c in hostname for c in (':', '@')):
             sub['backup'].error('wrong "hostname,/couchdb/data/dir"')
-        assert not args.rsync_reuse_dir or not args.tmp_dir, \
-            'cannot use --tmp-dir and --rsync-reuse-dir in the same time'
 
-        await backup(hostname, path, args.archive, args.rsync_reuse_dir,
-                     args.tmp_dir)
+        await backup(hostname, path, args.archive)
     elif args.action == 'unbrand':
         await unbrand(args.old_archive, args.new_archive, args.tmp_dir)
     elif args.action == 'load':
