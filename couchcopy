@@ -108,8 +108,8 @@ async def backup(hostname, path, output, nodes_names=None):
             if returncode1 == 1:
                 stderr1 = '\n'.join(
                     l for l in stderr1.decode().splitlines()
-                    if not l.endswith('File removed before we read it',
-                                      'file changed as we read it')).encode()
+                    if not l.endswith(('File removed before we read it',
+                                       'file changed as we read it'))).encode()
                 if not stderr1:
                     returncode1 = 0
 
