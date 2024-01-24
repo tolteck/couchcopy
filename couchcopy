@@ -211,7 +211,7 @@ async def change_nodes_names(user, password, url, names):
         shard_ranges = sorted(list(data['by_range'].keys()))
         q_from_archive = len(shard_ranges)
         _, data = await couch._server._get('/_node/_local/_config')
-        q_from_cluster = int(data['cluster']['q'])
+        q_from_cluster = int(data.get('cluster', {}).get('q', 2))
         assert q_from_cluster == q_from_archive, (
             f'Error q from CouchDB ({q_from_cluster}) != q from archive '
             f'({q_from_archive}), you need to change the `q` value used by '
@@ -357,7 +357,7 @@ async def restore(archive, cred, hostnames, paths, ports, names, couchdb_start,
             f'Error in names: {current_names} != {sorted(names)}. Try to '
             f'change nodes names with [nodename] arguments.')
         _, data = await couch._server._get('/_node/_local/_config')
-        assert int(data['cluster']['n']) >= len(names), (
+        assert int(data.get('cluster', {}).get('n', 1)) >= len(names), (
             'Error n < nodes count, this is not supported, for more infos see '
             'the README.')
 
