@@ -15,7 +15,7 @@ nodes.
 Limitations
 -----------
 
-Tested with CouchDB 3.1.1 only.
+Tested at least with CouchDB 3.1.1 and 3.3.3.
 
 To restore an archive, Couchcopy needs to stop and start CouchDB. It assumes
 that CouchDB is controlled by systemd. If you don't use systemd you can
